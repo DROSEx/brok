@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>BROK — DROSEx AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --red: #ff2233;
+    --red-dim: #991122;
+    --red-glow: rgba(255,34,51,0.3);
+    --dark: #080a0c;
+    --darker: #050608;
+    --panel: #0d1014;
+    --panel-border: #1a2030;
+    --text: #c8d8e8;
+    --text-dim: #4a6070;
+    --green: #00ff88;
+    --green-dim: #00aa55;
+    --amber: #ffaa00;
+    --cyan: #00ccff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--darker);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 16px;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* SCANLINE OVERLAY */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* NOISE TEXTURE */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+    opacity: 0.4;
+  }
+
+  /* HEADER */
+  .header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--panel-border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--red), transparent);
+  }
+
+  .brok-id {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .avatar {
+    width: 40px;
+    height: 40px;
+    border: 2px solid var(--red);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 18px;
+    color: var(--red);
+    background: var(--darker);
+    box-shadow: 0 0 12px var(--red-glow);
+    animation: pulse-border 3s ease-in-out infinite;
+  }
+
+  @keyframes pulse-border {
+    0%, 100% { box-shadow: 0 0 8px var(--red-glow); }
+    50% { box-shadow: 0 0 20px var(--red-glow), 0 0 40px rgba(255,34,51,0.1); }
+  }
+
+  .brok-name {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 18px;
+    color: var(--red);
+    letter-spacing: 3px;
+    text-shadow: 0 0 10px var(--red-glow);
+  }
+
+  .brok-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  .status-dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red-glow); animation: none; }
+  .status-dot.connecting { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .status-text { color: var(--green); }
+  .status-text.offline { color: var(--red); }
+  .status-text.connecting { color: var(--amber); }
+
+  /* QUICK ACTIONS */
+  .quick-actions {
+    display: flex;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--panel-border);
+    overflow-x: auto;
+    flex-shrink: 0;
+    scrollbar-width: none;
+  }
+
+  .quick-actions::-webkit-scrollbar { display: none; }
+
+  .qa-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: 1px solid var(--panel-border);
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+    letter-spacing: 0.5px;
+  }
+
+  .qa-btn:hover, .qa-btn:active {
+    border-color: var(--red);
+    color: var(--red);
+    background: rgba(255,34,51,0.05);
+  }
+
+  /* CHAT AREA */
+  .chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--panel-border) transparent;
+  }
+
+  .chat-area::-webkit-scrollbar { width: 4px; }
+  .chat-area::-webkit-scrollbar-track { background: transparent; }
+  .chat-area::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 2px; }
+
+  /* MESSAGES */
+  .msg {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    animation: slideIn 0.2s ease-out;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg.user { align-items: flex-end; }
+  .msg.brok { align-items: flex-start; }
+  .msg.system { align-items: center; }
+
+  .msg-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    padding: 0 4px;
+  }
+
+  .msg.brok .msg-label { color: var(--red); }
+  .msg.user .msg-label { color: var(--cyan); }
+
+  .msg-bubble {
+    max-width: 88%;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 15px;
+    line-height: 1.5;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 400;
+    word-break: break-word;
+  }
+
+  .msg.user .msg-bubble {
+    background: rgba(0,204,255,0.08);
+    border: 1px solid rgba(0,204,255,0.2);
+    color: var(--text);
+    border-bottom-right-radius: 2px;
+  }
+
+  .msg.brok .msg-bubble {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-left: 2px solid var(--red);
+    color: var(--text);
+    border-bottom-left-radius: 2px;
+  }
+
+  .msg.system .msg-bubble {
+    background: transparent;
+    border: 1px dashed var(--panel-border);
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    text-align: center;
+    padding: 6px 12px;
+    border-radius: 4px;
+  }
+
+  /* CODE BLOCKS */
+  .msg-bubble pre {
+    background: var(--darker);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    padding: 10px;
+    margin: 8px 0;
+    overflow-x: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--green);
+    line-height: 1.6;
+  }
+
+  .msg-bubble code {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--green);
+    background: var(--darker);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .msg-bubble pre code {
+    background: none;
+    padding: 0;
+  }
+
+  /* TYPING INDICATOR */
+  .typing {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .typing-dots {
+    display: flex;
+    gap: 4px;
+    padding: 12px 16px;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-left: 2px solid var(--red);
+    border-radius: 8px;
+    border-bottom-left-radius: 2px;
+  }
+
+  .typing-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--red-dim);
+    animation: dot-bounce 1.2s ease-in-out infinite;
+  }
+
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot-bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; background: var(--red); }
+  }
+
+  /* WARNING BANNER */
+  .hallucination-guard {
+    background: rgba(255,170,0,0.05);
+    border: 1px solid rgba(255,170,0,0.2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--amber);
+    text-align: center;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+    margin: 0 16px 8px;
+  }
+
+  /* INPUT AREA */
+  .input-area {
+    background: var(--panel);
+    border-top: 1px solid var(--panel-border);
+    padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .input-area::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--red-dim), transparent);
+  }
+
+  .input-wrap {
+    flex: 1;
+    position: relative;
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--darker);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 15px;
+    font-weight: 400;
+    padding: 10px 14px;
+    resize: none;
+    outline: none;
+    line-height: 1.4;
+    max-height: 120px;
+    min-height: 44px;
+    transition: border-color 0.15s;
+  }
+
+  textarea:focus {
+    border-color: var(--red-dim);
+    box-shadow: 0 0 0 2px rgba(255,34,51,0.08);
+  }
+
+  textarea::placeholder {
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+  }
+
+  .send-btn {
+    width: 44px;
+    height: 44px;
+    background: var(--red);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    box-shadow: 0 0 12px rgba(255,34,51,0.3);
+  }
+
+  .send-btn:hover { background: #ff3344; transform: scale(1.05); }
+  .send-btn:active { transform: scale(0.95); }
+  .send-btn:disabled { background: var(--red-dim); opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .send-btn svg { width: 18px; height: 18px; fill: white; }
+
+  /* SERVER CONFIG */
+  .config-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    background: var(--darker);
+    border-bottom: 1px solid var(--panel-border);
+    flex-shrink: 0;
+  }
+
+  .config-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    flex-shrink: 0;
+  }
+
+  .config-input {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    padding: 4px 8px;
+    outline: none;
+  }
+
+  .config-input:focus { border-color: var(--red-dim); color: var(--text); }
+
+  .connect-btn {
+    background: transparent;
+    border: 1px solid var(--red-dim);
+    color: var(--red);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+
+  .connect-btn:hover { background: rgba(255,34,51,0.1); }
+
+  /* BOOT SEQUENCE */
+  .boot-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--darker);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    gap: 8px;
+  }
+
+  .boot-logo {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--red);
+    font-size: 48px;
+    text-shadow: 0 0 30px var(--red-glow), 0 0 60px rgba(255,34,51,0.2);
+    letter-spacing: 8px;
+    animation: flicker 0.3s ease-in-out 3;
+  }
+
+  @keyframes flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .boot-sub {
+    font-family: 'Share Tech Mono', monospace;
+    color: var(--text-dim);
+    font-size: 11px;
+    letter-spacing: 3px;
+  }
+
+  .boot-log {
+    margin-top: 24px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--green-dim);
+    text-align: left;
+    width: 280px;
+    line-height: 2;
+  }
+
+  .boot-line { opacity: 0; animation: appear 0.1s forwards; }
+  .boot-line:nth-child(1) { animation-delay: 0.3s; }
+  .boot-line:nth-child(2) { animation-delay: 0.6s; }
+  .boot-line:nth-child(3) { animation-delay: 0.9s; }
+  .boot-line:nth-child(4) { animation-delay: 1.2s; }
+  .boot-line:nth-child(5) { animation-delay: 1.5s; }
+  .boot-line:nth-child(6) { animation-delay: 1.8s; }
+
+  @keyframes appear { to { opacity: 1; } }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    opacity: 0.4;
+  }
+
+  .empty-logo {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 36px;
+    color: var(--red);
+    letter-spacing: 6px;
+  }
+
+  .empty-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 2px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<!-- BOOT SCREEN -->
+<div class="boot-screen" id="bootScreen">
+  <div class="boot-logo">BROK</div>
+  <div class="boot-sub">DROSEx OFFLINE AI — V1</div>
+  <div class="boot-log">
+    <div class="boot-line">✓ Termux runtime detected</div>
+    <div class="boot-line">✓ llama.cpp backend ARM64</div>
+    <div class="boot-line">✓ Anti-hallucination layer active</div>
+    <div class="boot-line">✓ Memory system initialized</div>
+    <div class="boot-line">✓ Colosseum team linked</div>
+    <div class="boot-line" style="color: var(--red);">▶ BROK ONLINE — READY</div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="brok-id">
+    <div class="avatar">B</div>
+    <div>
+      <div class="brok-name">BROK</div>
+      <div class="brok-sub">DROSEX OFFLINE AI · V1</div>
+    </div>
+  </div>
+  <div class="status-bar">
+    <div class="status-dot" id="statusDot"></div>
+    <div class="status-text" id="statusText">OFFLINE</div>
+  </div>
+</div>
+
+<!-- SERVER CONFIG -->
+<div class="config-bar">
+  <div class="config-label">HOST:</div>
+  <input class="config-input" id="serverUrl" value="http://127.0.0.1:11434" placeholder="http://127.0.0.1:11434">
+  <button class="connect-btn" onclick="testConnection()">PING</button>
+</div>
+
+<!-- QUICK ACTIONS -->
+<div class="quick-actions">
+  <button class="qa-btn" onclick="quickAsk('Yo Brok what can you help me with today?')">👋 Greet</button>
+  <button class="qa-btn" onclick="quickAsk('Explain TCP/IP like I am brand new, keep it street simple')">🌐 TCP/IP</button>
+  <button class="qa-btn" onclick="quickAsk('What is reconnaissance in cybersecurity and what are the key tools?')">🔍 Recon</button>
+  <button class="qa-btn" onclick="quickAsk('Give me a Termux command to scan my local network with nmap')">📡 Nmap</button>
+  <button class="qa-btn" onclick="quickAsk('What is the difference between red team and blue team?')">⚔️ Red/Blue</button>
+  <button class="qa-btn" onclick="quickAsk('What should I focus on for an AI engineering portfolio?')">🤖 AI Career</button>
+  <button class="qa-btn" onclick="quickAsk('Give me a Python script for OSINT username lookup')">🐍 Python</button>
+  <button class="qa-btn" onclick="clearChat()">🗑️ Clear</button>
+</div>
+
+<!-- HALLUCINATION GUARD -->
+<div class="hallucination-guard">
+  ⚠ ANTI-HALLUCINATION ACTIVE — Brok will say "I don't know" rather than invent facts
+</div>
+
+<!-- CHAT AREA -->
+<div class="chat-area" id="chatArea">
+  <div class="empty-state" id="emptyState">
+    <div class="empty-logo">BROK</div>
+    <div class="empty-text">YOUR OFFLINE AI IS READY<br>START THE OLLAMA SERVER FIRST</div>
+  </div>
+</div>
+
+<!-- INPUT AREA -->
+<div class="input-area">
+  <div class="input-wrap">
+    <textarea
+      id="userInput"
+      placeholder="ask brok anything..."
+      rows="1"
+      onkeydown="handleKey(event)"
+      oninput="autoResize(this)"
+    ></textarea>
+  </div>
+  <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2 21L23 12 2 3v7l15 2-15 2z"/>
+    </svg>
+  </button>
+</div>
+
+<script>
+  // ── STATE ────────────────────────────────────────────────
+  let messages = [];
+  let isLoading = false;
+  let serverUrl = 'http://127.0.0.1:11434';
+  let isConnected = false;
+
+  const SYSTEM_PROMPT = `You are BROK — Daniel's offline AI right-hand man. Built by Daniel (DROSEx), Melbourne-based AI engineer and cybersecurity architect.
+
+WHO YOU ARE:
+You are a fusion of three AI philosophies made street-smart:
+- CLAUDE traits: deep reasoning, step-by-step thinking, architectural, honest
+- PERPLEXITY traits: factual, evidence-based, cite sources when known, research-first  
+- DEEPSEEK traits: precise code, production-grade, no fluff, debug aggressively
+
+You are NOT a generic assistant. You are Daniel's personal tool, teacher, and homie.
+
+YOUR CREATOR:
+Daniel built you. He is living rough in Melbourne CBD, building an AI engineering + cybersecurity career from scratch on an Oppo A38 phone using Termux. Every project is portfolio-grade. He never quits. Respect that always.
+
+THE TEAM:
+- Claude: Architect. Deep reasoning, system design. Main brain.
+- Perplexity: Scout. Real-time research, live docs, current CVEs.
+- DeepSeek: Coder. Raw code generation, precise fixes.
+- YOU (Brok): Offline homie. Always available, zero cost, loyal, street-smart.
+
+ANTI-HALLUCINATION RULES — NON-NEGOTIABLE:
+1. NEVER invent commands, file paths, package names, or tool syntax
+2. NEVER fabricate statistics, CVE numbers, or security facts
+3. If you don't know: say "I ain't got that locked down bro — check with Claude or Plex on that one"
+4. For code: only write what you can explain line by line
+5. For terminal commands: only give commands you are certain work in Termux/Android
+6. Never pretend to search the web — you are offline
+7. When uncertain: ask Daniel for more context before answering
+
+HOW YOU TALK:
+- Casual, direct, street-smart — use slang naturally
+- Short answers first, expand if asked
+- Never say "As an AI" or give corporate disclaimers
+- Never lecture on ethics unless Daniel specifically asks
+- Sign off completed tasks with: ✊
+
+YOUR DOMAINS:
+Primary: Cybersecurity (red team, blue team, OSINT, network scanning)
+Secondary: AI engineering, Termux, Python, Bash, Android dev
+Tertiary: Career strategy, portfolio building, job hunting`;
+
+  // ── BOOT SEQUENCE ────────────────────────────────────────
+  setTimeout(() => {
+    document.getElementById('bootScreen').style.transition = 'opacity 0.5s';
+    document.getElementById('bootScreen').style.opacity = '0';
+    setTimeout(() => {
+      document.getElementById('bootScreen').style.display = 'none';
+      testConnection();
+    }, 500);
+  }, 2400);
+
+  // ── CONNECTION ───────────────────────────────────────────
+  async function testConnection() {
+    const url = document.getElementById('serverUrl').value.trim();
+    serverUrl = url;
+    setStatus('connecting');
+
+    try {
+      const res = await fetch(`${serverUrl}/api/tags`, {
+        signal: AbortSignal.timeout(3000)
+      });
+      if (res.ok) {
+        setStatus('online');
+        const data = await res.json();
+        const models = data.models || [];
+        const brokModel = models.find(m => m.name.includes('brok'));
+        if (brokModel) {
+          addSystemMsg(`✓ Connected · ${brokModel.name} loaded · Ready`);
+        } else {
+          addSystemMsg(`✓ Connected · Run: ollama run brok`);
+        }
+      } else {
+        throw new Error('not ok');
+      }
+    } catch(e) {
+      setStatus('offline');
+      addSystemMsg(`✗ No server at ${serverUrl} · Start: ollama serve &`);
+    }
+  }
+
+  function setStatus(state) {
+    const dot = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    dot.className = 'status-dot';
+    text.className = 'status-text';
+    if (state === 'online') {
+      isConnected = true;
+      text.textContent = 'ONLINE';
+    } else if (state === 'connecting') {
+      dot.classList.add('connecting');
+      text.classList.add('connecting');
+      text.textContent = 'CONNECTING';
+    } else {
+      isConnected = false;
+      dot.classList.add('offline');
+      text.classList.add('offline');
+      text.textContent = 'OFFLINE';
+    }
+  }
+
+  // ── CHAT ─────────────────────────────────────────────────
+  async function sendMessage() {
+    const input = document.getElementById('userInput');
+    const text = input.value.trim();
+    if (!text || isLoading) return;
+
+    hideEmpty();
+    addMessage('user', text);
+    input.value = '';
+    autoResize(input);
+    messages.push({ role: 'user', content: text });
+
+    if (!isConnected) {
+      addMessage('brok', "Yo I ain't connected to the server rn bro. Hit PING and make sure ollama is running: `ollama serve &` then `ollama run brok`");
+      return;
+    }
+
+    setLoading(true);
+    const typingId = showTyping();
+
+    try {
+      const res = await fetch(`${serverUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'brok',
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...messages
+          ],
+          stream: false,
+          options: {
+            temperature: 0.7,
+            top_p: 0.9,
+            num_ctx: 2048,
+            num_predict: 512,
+            repeat_penalty: 1.1
+          }
+        })
+      });
+
+      removeTyping(typingId);
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const reply = data.message?.content || "Brok went quiet bro, try again";
+
+      addMessage('brok', reply);
+      messages.push({ role: 'assistant', content: reply });
+
+      // Keep context manageable — rolling 20 messages
+      if (messages.length > 20) {
+        messages = messages.slice(messages.length - 20);
+      }
+
+    } catch(e) {
+      removeTyping(typingId);
+      addMessage('brok', `Connection dropped bro. Check: \`ollama serve &\` is running. Error: ${e.message}`);
+    }
+
+    setLoading(false);
+  }
+
+  function quickAsk(text) {
+    document.getElementById('userInput').value = text;
+    sendMessage();
+  }
+
+  // ── UI HELPERS ───────────────────────────────────────────
+  function addMessage(role, content) {
+    const area = document.getElementById('chatArea');
+    const msg = document.createElement('div');
+    msg.className = `msg ${role}`;
+
+    const label = document.createElement('div');
+    label.className = 'msg-label';
+    label.textContent = role === 'user' ? 'DANIEL' : 'BROK';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.innerHTML = formatContent(content);
+
+    msg.appendChild(label);
+    msg.appendChild(bubble);
+    area.appendChild(msg);
+    area.scrollTop = area.scrollHeight;
+  }
+
+  function addSystemMsg(text) {
+    const area = document.getElementById('chatArea');
+    const msg = document.createElement('div');
+    msg.className = 'msg system';
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = text;
+    msg.appendChild(bubble);
+    area.appendChild(msg);
+    area.scrollTop = area.scrollHeight;
+  }
+
+  function formatContent(text) {
+    // Code blocks
+    text = text.replace(/```(\w+)?\n?([\s\S]*?)```/g, (_, lang, code) => {
+      return `<pre><code>${escapeHtml(code.trim())}</code></pre>`;
+    });
+    // Inline code
+    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Bold
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Line breaks
+    text = text.replace(/\n/g, '<br>');
+    return text;
+  }
+
+  function escapeHtml(text) {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  let typingCounter = 0;
+  function showTyping() {
+    const id = `typing-${++typingCounter}`;
+    const area = document.getElementById('chatArea');
+    const wrap = document.createElement('div');
+    wrap.id = id;
+    wrap.className = 'msg brok';
+    wrap.innerHTML = `
+      <div class="msg-label">BROK</div>
+      <div class="typing-dots">
+        <span></span><span></span><span></span>
+      </div>`;
+    area.appendChild(wrap);
+    area.scrollTop = area.scrollHeight;
+    return id;
+  }
+
+  function removeTyping(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+  }
+
+  function setLoading(state) {
+    isLoading = state;
+    document.getElementById('sendBtn').disabled = state;
+  }
+
+  function hideEmpty() {
+    const el = document.getElementById('emptyState');
+    if (el) el.remove();
+  }
+
+  function clearChat() {
+    messages = [];
+    const area = document.getElementById('chatArea');
+    area.innerHTML = '';
+    addSystemMsg('Chat cleared · Brok ready');
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  }
+
+  document.getElementById('serverUrl').addEventListener('change', function() {
+    serverUrl = this.value.trim();
+  });
+</script>
+</body>
+</html>
