@@ -1,8 +1,8 @@
 # BROK — DROSEx Offline AI
 
-> "We ride till the death, come back on that shield." — Team motto
+> 
 
-**Built by Daniel Vitullo (DROSEx)** — Melbourne-based AI engineer and cybersecurity architect.
+**Built by Daniel Paola (DROSEx)** — Melbourne-based AI engineer and cybersecurity architect.
 
 ## What is Brok?
 
